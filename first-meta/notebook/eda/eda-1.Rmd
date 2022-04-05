@@ -1,0 +1,152 @@
+---
+title: "EDA Notebook 1"
+output: html_notebook
+---
+
+```{r, setup}
+library(tidyverse)
+```
+
+First, we need to load in all of the experiment meta data we have from the Notion board. Then, clean and organize it.
+
+```{r}
+notion_board_raw <- read_csv("../../data/raw/notion-experiment-board-export-033022.zip")
+```
+
+There are a lot of fields here that we don't need initially. First, let's label all experiments with a uuid for later reference.
+
+```{r}
+set.seed(1)
+
+notion_board_ref <-
+  notion_board_raw %>% 
+  mutate(uuid = uuid::UUIDgenerate(n = nrow(.)))
+```
+
+
+```{r}
+notion_board_subset <- 
+  notion_board_ref %>% 
+  select(uuid,
+         name = Name,
+         amplitude_urls = `Amplitude Dashboard`,
+         experiment_type = `Experiment Type`,
+         overlappers = Overlappers,
+         platform = Platform,
+         run_dates = `Run Dates`,
+         test_dates = `Test Dates`)
+```
+
+```{r}
+str(notion_board_subset)
+```
+
+For the purposes of this analysis, we are only interested in iOS and Android experiments.
+
+```{r}
+notion_board_subset <-
+  notion_board_subset %>% 
+  mutate(ios = str_detect(tolower(platform), "ios")) %>% 
+  mutate(android = str_detect(tolower(platform), "android"))
+```
+
+```{r}
+notion_board_subset %>% count(ios, android)
+```
+
+Many of these aren't labeled at all.
+
+```{r}
+notion_board_subset %>% filter(is.na(platform)) %>% select(name, run_dates)
+```
+Many of these should be labeled as iOS or Android. The experiment names contain this information in some cases.
+
+```{r}
+library(assertr)
+```
+
+```{r}
+notion_board_subset <-
+  notion_board_subset %>% 
+  mutate(ios_from_name = (is.na(platform)) & str_detect(tolower(name), "ios")) %>% 
+  mutate(android_from_name = (is.na(platform)) & str_detect(tolower(name), "android")) %>% 
+  mutate(ios = ios | ios_from_name) %>% 
+  mutate(android = android | android_from_name)
+```
+
+```{r}
+notion_board_subset %>% count(ios, android)
+```
+
+Let's look at the remaining double NAs:
+
+```{r}
+notion_board_subset %>% 
+  filter(is.na(ios) & is.na(android)) %>% 
+  select(name, run_dates)
+```
+I believe that _most_ of these double NAs will be filtered out due to the nature of the experiment, will loop back later.
+
+Next, for the purposes of this meta analysis, we only care about new user experiments. We need to make sure, however, that all new user experiments are actually tagged as "New User" in the experiment_type column. How many aren't labeled at all?
+
+```{r}
+notion_board_subset %>% filter(is.na(experiment_type))
+```
+We can retrieve the treatment descriptions from the reference data frame:
+
+```{r}
+notion_board_subset %>% 
+  filter(is.na(experiment_type)) %>% 
+  left_join(notion_board_ref, by = "uuid") %>% 
+  pull(`Treatment Description`)
+```
+
+Many also have no treatment description, let's work through these first:
+
+```{r}
+notion_board_subset %>% 
+  filter(is.na(experiment_type)) %>% 
+  left_join(notion_board_ref, by = "uuid") %>% 
+  filter(is.na(`Treatment Description`)) %>% 
+  select(name, run_dates)
+```
+All of these experiments ran in 2018 or 2019. That makes sense, our recordkeeping became more complete as time went on. Looking at the experiment board, I see that only a few 2018 experiments appear. On this basis, let's limit this analysis to 2019 forward.
+
+```{r}
+notion_board_subset %>% 
+  filter(!str_detect(run_dates, "2018")) %>% 
+  select(name, run_dates)
+```
+
+After reviewing this list, I'd say we should include it after all due to the longboarding experiments. So, all of the "dobule NA" experiments above will need to be labeled manually. Let's save a csv, modify it, and load it back in.
+
+```{r, eval = FALSE}
+notion_board_subset %>% 
+  filter(is.na(experiment_type)) %>% 
+  left_join(notion_board_ref, by = "uuid") %>% 
+  filter(is.na(`Treatment Description`)) %>% 
+  select(name, run_dates, Stage) %>% 
+  write_csv("../../data/processed/notion_board_na_type_na_description.csv")
+```
+
+(filter stage to complete)
+
+```{r}
+stop()
+```
+
+```{r}
+notion_board_subset <-
+  notion_board_subset %>% 
+  mutate(new_user = str_detect(tolower(experiment_type), "new user")) %>% 
+  mutate(onboarding = str_detect(tolower(experiment_type), "onboarding"))
+```
+
+```{r}
+notion_board_subset %>% count(new_user, onboarding)
+```
+
+```{r}
+noti
+```
+
